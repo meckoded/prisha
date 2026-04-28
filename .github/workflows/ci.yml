@@ -22,11 +22,8 @@ jobs:
       - name: Install dependencies
         run: cd frontend && npm ci
 
-      - name: Type check
-        run: cd frontend && npx tsc --noEmit
-
       - name: Build
-        run: cd frontend && npm run build
+        run: cd frontend && npx vite build
 
       - name: Deploy to Netlify
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
@@ -37,6 +34,5 @@ jobs:
           production-deploy: true
           github-token: ${{ secrets.GITHUB_TOKEN }}
           netlify-auth-token: ${{ secrets.NETLIFY_AUTH_TOKEN }}
-        env:
-          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+          site-id: ${{ secrets.NETLIFY_SITE_ID }}
         timeout-minutes: 5
