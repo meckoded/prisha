@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState, type ButtonHTMLAttributes } from 'react';
 import { 
  ChevronRight, 
  ChevronLeft, 
@@ -11,15 +11,38 @@ import {
  Search
 } from 'lucide-react';
 
-// --- Utility for Tailwind Classes ---
-const cn = (...classes) => classes.filter(Boolean).join(' ');
+// --- Types ---
+type EventData = {
+  id: number;
+  title: string;
+  type: 'primary' | 'work' | 'holiday' | 'personal';
+};
 
-// --- Mock Data (Nissan 5786 / March-April 2026) ---
-// הוספנו אירועים לחלק מהימים כדי להדגים את תצוגת התגיות
-const mockDays = [
- // חודש קודם (אדר)
+type DayData = {
+  h: string;
+  g: number;
+  current: boolean;
+  isHoliday?: boolean;
+  events?: EventData[];
+};
+
+type ButtonVariant = 'default' | 'primary' | 'outline' | 'ghost' | 'secondary';
+type ButtonSize = 'default' | 'sm' | 'lg' | 'icon';
+
+interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  variant?: ButtonVariant;
+  size?: ButtonSize;
+}
+
+// --- Utility ---
+const cn = (...classes: (string | boolean | undefined | null)[]): string =>
+  classes.filter(Boolean).join(' ');
+
+// --- Mock Data ---
+const mockDays: DayData[] = [
+ // Previous month (Adar)
  { h: 'כו', g: 15, current: false }, { h: 'כז', g: 16, current: false }, { h: 'כח', g: 17, current: false }, { h: 'כט', g: 18, current: false },
- // חודש נוכחי (ניסן)
+ // Current month (Nisan)
  { h: 'א', g: 19, current: true, events: [{ id: 1, title: 'ראש חודש ניסן', type: 'holiday' }, { id: 2, title: 'פגישת הנהלה', type: 'work' }] }, 
  { h: 'ב', g: 20, current: true }, 
  { h: 'ג', g: 21, current: true }, 
@@ -34,10 +57,10 @@ const mockDays = [
  { h: 'יב', g: 30, current: true }, 
  { h: 'יג', g: 31, current: true }, 
  { h: 'יד', g: 1, current: true, events: [
- { id: 6, title: 'תענית בכורות', type: 'holiday' }, 
- { id: 7, title: 'סוף זמן אכילת חמץ', type: 'holiday' }, 
- { id: 8, title: 'יציאה לחופשה', type: 'personal' },
- { id: 9, title: 'הכנות אחרונות', type: 'personal' } // אירוע רביעי כדי להדגים הסתרה
+   { id: 6, title: 'תענית בכורות', type: 'holiday' }, 
+   { id: 7, title: 'סוף זמן אכילת חמץ', type: 'holiday' }, 
+   { id: 8, title: 'יציאה לחופשה', type: 'personal' },
+   { id: 9, title: 'הכנות אחרונות', type: 'personal' }
  ]},
  { h: 'טו', g: 2, current: true, isHoliday: true, events: [{ id: 10, title: 'פסח - חג ראשון', type: 'primary' }] }, 
  { h: 'טז', g: 3, current: true, isHoliday: true, events: [{ id: 11, title: "א' חול המועד", type: 'holiday' }] }, 
@@ -55,54 +78,53 @@ const mockDays = [
  { h: 'כח', g: 15, current: true },
  { h: 'כט', g: 16, current: true }, 
  { h: 'ל', g: 17, current: true },
- // חודש הבא (אייר)
+ // Next month (Iyar)
  { h: 'א', g: 18, current: false }
 ];
 
 const weekDaysFull = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
 
-// --- UI Components ---
-const Button = ({ variant = 'default', size = 'default', className, children, ...props }) => {
- const baseStyles = "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400 disabled:pointer-events-none disabled:opacity-50";
- const variants = {
+// --- Styles ---
+const BASE_STYLES = "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400 disabled:pointer-events-none disabled:opacity-50";
+
+const buttonVariants: Record<ButtonVariant, string> = {
  default: "bg-slate-900 text-slate-50 shadow hover:bg-slate-900/90",
  primary: "bg-blue-600 text-white shadow hover:bg-blue-700",
  outline: "border border-slate-200 bg-transparent hover:bg-slate-50 hover:text-slate-900",
  ghost: "hover:bg-slate-100 hover:text-slate-900 text-slate-600",
  secondary: "bg-slate-100 text-slate-900 hover:bg-slate-200/80"
- };
- const sizes = {
+};
+
+const buttonSizes: Record<ButtonSize, string> = {
  default: "h-9 px-4 py-2",
  sm: "h-8 rounded-md px-3 text-xs",
  lg: "h-10 rounded-md px-8",
  icon: "h-9 w-9"
- };
- 
+};
+
+const eventStyles: Record<EventData['type'], string> = {
+ primary: 'bg-blue-600 text-white border-blue-700',
+ work: 'bg-blue-50 text-blue-700 border-blue-100 hover:bg-blue-100/80',
+ holiday: 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200/80',
+ personal: 'bg-indigo-50 text-indigo-700 border-indigo-100 hover:bg-indigo-100/80',
+};
+
+// --- Components ---
+function Button({ variant = 'default', size = 'default', className, children, ...props }: ButtonProps) {
  return (
- <button className={cn(baseStyles, variants[variant], sizes[size], className)} {...props}>
+ <button className={cn(BASE_STYLES, buttonVariants[variant], buttonSizes[size], className)} {...props}>
  {children}
  </button>
  );
-};
+}
 
 export default function App() {
- const [todayIndex] = useState(4); // כביכול היום הוא א' בניסן
-
- // עוזר לעיצוב סוגי אירועים
- const getEventStyle = (type) => {
- switch (type) {
- case 'primary': return 'bg-blue-600 text-white border-blue-700';
- case 'work': return 'bg-blue-50 text-blue-700 border-blue-100 hover:bg-blue-100/80';
- case 'holiday': return 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200/80';
- case 'personal': return 'bg-indigo-50 text-indigo-700 border-indigo-100 hover:bg-indigo-100/80';
- default: return 'bg-slate-50 text-slate-700 border-slate-200';
- }
- };
+ const [todayIndex] = useState(4);
 
  return (
  <div dir="rtl" className="h-screen w-full bg-[#f8fafc] flex font-sans text-slate-950 overflow-hidden selection:bg-blue-100 selection:text-blue-900">
  
- {/* Sidebar - Navigation & Mini Widget */}
+ {/* Sidebar */}
  <aside className="w-64 bg-white border-l border-slate-200 flex flex-col hidden md:flex shrink-0 z-10">
  <div className="p-6">
  <h2 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
@@ -140,10 +162,9 @@ export default function App() {
  </div>
  </aside>
 
- {/* Main Content Area */}
+ {/* Main */}
  <main className="flex-1 flex flex-col h-full overflow-hidden">
  
- {/* Top Header */}
  <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 shrink-0">
  <div className="flex items-center gap-4">
  <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-md p-1">
@@ -173,11 +194,10 @@ export default function App() {
  </div>
  </header>
 
- {/* Calendar Grid Container */}
+ {/* Calendar */}
  <div className="flex-1 p-6 overflow-hidden flex flex-col">
  <div className="flex-1 flex flex-col bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
  
- {/* Days Header Row */}
  <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50/50 shrink-0">
  {weekDaysFull.map((day) => (
  <div key={day} className="py-3 text-center text-xs font-semibold text-slate-500 border-l last:border-l-0 border-slate-200">
@@ -186,7 +206,6 @@ export default function App() {
  ))}
  </div>
 
- {/* Main Grid (1px internal borders via gap and background) */}
  <div className="flex-1 grid grid-cols-7 grid-rows-5 bg-slate-200 gap-[1px]">
  {mockDays.map((day, index) => {
  const isToday = todayIndex === index;
@@ -202,7 +221,6 @@ export default function App() {
  !day.current && "bg-slate-50/40"
  )}
  >
- {/* Cell Header: Dates */}
  <div className="flex justify-between items-start p-2">
  <span className={cn(
  "text-sm font-semibold flex items-center justify-center w-7 h-7 rounded-full transition-colors", 
@@ -218,14 +236,13 @@ export default function App() {
  </span>
  </div>
 
- {/* Cell Body: Events Container */}
  <div className="flex-1 flex flex-col gap-[3px] px-1.5 pb-1.5 overflow-hidden">
  {visibleEvents.map((evt) => (
  <div 
  key={evt.id} 
  className={cn(
  "px-1.5 py-1 text-[11px] font-medium rounded-[4px] truncate border",
- getEventStyle(evt.type)
+ eventStyles[evt.type]
  )}
  title={evt.title}
  >
@@ -233,7 +250,6 @@ export default function App() {
  </div>
  ))}
  
- {/* "+X נוספים" indicator */}
  {hiddenEventsCount > 0 && (
  <div className="text-[10px] font-medium text-slate-500 px-1 mt-0.5 hover:text-slate-800 transition-colors">
  + {hiddenEventsCount} נוספים
