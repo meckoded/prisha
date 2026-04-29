@@ -1,4 +1,6 @@
-// services/calendarService.js — לוח שנה יהודי + זמני היום via Hebcal REST API
+// services/calendarService.js — לוח שנה יהודי + זמני היום אמיתיים באמצעות @hebcal/core
+import { Location, Zmanim, HebrewCalendar, HDate, flags as hebcalFlags } from '@hebcal/core';
+
 const LOCATIONS = {
   '281184': { name: 'ירושלים', hebrewName: 'ירושלים', lat: 31.7683, lng: 35.2137, tz: 'Asia/Jerusalem' },
   '293397': { name: 'תל אביב', hebrewName: 'תל אביב', lat: 32.0853, lng: 34.7818, tz: 'Asia/Jerusalem' },
@@ -29,121 +31,128 @@ export function getAllLocations() {
   }));
 }
 
-function mockZmanim() {
-  return {
-    alot: '04:32',
-    sunrise: '05:45',
-    sofZman: '09:12',
-    mincha: '12:30',
-    sunset: '18:45',
-    tzeit: '19:15',
-  };
+function toHebcalLocation(locData) {
+  return new Location(locData.lat, locData.lng, true, locData.tz);
 }
 
-async function fetchHebcalMonth(year, month, locationId) {
-  const loc = LOCATIONS[locationId];
-  if (!loc) return null;
-  const url = `https://www.hebcal.com/hebcal?v=1&cfg=json&year=${year}&month=${month}&geonameid=${locationId}&maj=on&min=on&nx=on`;
+function formatTime(dt) {
+  if (!dt) return null;
+  const h = dt.getUTCHours();
+  const m = dt.getUTCMinutes();
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+function getZmanimForDate(loc, date) {
   try {
-    const response = await fetch(url);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const data = await response.json();
-    return { loc, data };
-  } catch (error) {
-    console.warn('Hebcal API failed:', error.message);
-    return null;
+    const z = new Zmanim(loc, date);
+    return {
+      alot: formatTime(z.alotHaShachar()),
+      sunrise: formatTime(z.neitzHaChama()),
+      sofZman: formatTime(z.sofZmanShma()),
+      mincha: formatTime(z.minchaGedola()),
+      sunset: formatTime(z.shkiah()),
+      tzeit: formatTime(z.tzeit()),
+    };
+  } catch {
+    return {
+      alot: null, sunrise: null, sofZman: null, mincha: null, sunset: null, tzeit: null,
+    };
   }
+}
+
+/**
+ * Determine if an event is a "holiday" for display purposes.
+ * We include: CHAG, MINOR_FAST, MAJOR_FAST, MODERN_HOLIDAY, MINOR_HOLIDAY, ROSH_CHODESH, EREV, CHOL_HAMOED
+ * We exclude: LIGHT_CANDLES, YOM_TOV_ENDS, CANDLE_LIGHTING types (handled separately)
+ */
+const HOLIDAY_FLAGS =
+  hebcalFlags.CHAG |
+  hebcalFlags.MINOR_FAST |
+  hebcalFlags.MAJOR_FAST |
+  hebcalFlags.MODERN_HOLIDAY |
+  hebcalFlags.MINOR_HOLIDAY |
+  hebcalFlags.ROSH_CHODESH;
+
+function isHolidayEvent(ev) {
+  const f = ev.getFlags();
+  // Skip candle-lighting and havdalah events (handled separately)
+  if (f & (hebcalFlags.LIGHT_CANDLES | hebcalFlags.YOM_TOV_ENDS | hebcalFlags.LIGHT_CANDLES_TZEIS)) return false;
+  // Skip parsha, daf yomi, omer, daily learning
+  if (f & (hebcalFlags.PARSHA_HASHAVUA | hebcalFlags.DAF_YOMI | hebcalFlags.OMER_COUNT | hebcalFlags.DAILY_LEARNING)) return false;
+  return (f & HOLIDAY_FLAGS) !== 0;
+}
+
+function isCandleEvent(ev) {
+  return (ev.getFlags() & hebcalFlags.LIGHT_CANDLES) !== 0 || (ev.getFlags() & hebcalFlags.LIGHT_CANDLES_TZEIS) !== 0;
+}
+
+function isHavdalahEvent(ev) {
+  return (ev.getFlags() & hebcalFlags.YOM_TOV_ENDS) !== 0;
+}
+
+function isParshaEvent(ev) {
+  return ev.constructor.name === 'ParshaEvent' || (ev.getFlags() & hebcalFlags.PARSHA_HASHAVUA) !== 0;
 }
 
 export async function getMonth(year, month, locationId) {
-  const loc = getLocation(locationId);
-  if (!loc) return null;
+  const locData = LOCATIONS[locationId];
+  if (!locData) return null;
 
-  const result = await fetchHebcalMonth(year, month, locationId);
-  if (!result) {
-    // Fallback: create empty month
-    const daysInMonth = new Date(year, month, 0).getDate();
-    const days = [];
-    for (let d = 1; d <= daysInMonth; d++) {
-      days.push({
-        gregorian: `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`,
-        hebrew: '',
-        parsha: null,
-        zmanim: mockZmanim(),
-        holidays: [],
-        candleLighting: null,
-        havdalah: null,
-      });
-    }
-    return {
-      year,
-      month,
-      hebrewMonth: 'unknown',
-      hebrewYear: 'unknown',
-      days,
-      location: { id: loc.id, name: loc.name },
-    };
+  const hebcalLoc = toHebcalLocation(locData);
+
+  // Get Hebrew month/year from the first day of the requested month
+  const firstOfMonth = new Date(year, month - 1, 1);
+  const hd = new HDate(firstOfMonth);
+
+  // Build days array using @hebcal/core calendar events
+  const events = HebrewCalendar.calendar({ year, month });
+
+  // Index events by date string
+  const eventsByDate = {};
+  for (const ev of events) {
+    const g = ev.date.greg();
+    const dateStr = g.toISOString().slice(0, 10);
+    if (!eventsByDate[dateStr]) eventsByDate[dateStr] = [];
+    eventsByDate[dateStr].push(ev);
   }
-
-  const { data } = result;
-  const items = data.items || [];
-  const daysMap = {};
-  items.forEach(item => {
-    const date = item.date.slice(0, 10);
-    if (!daysMap[date]) {
-      daysMap[date] = {
-        gregorian: date,
-        hebrew: item.hdate || '',
-        parsha: null,
-        holidays: [],
-        zmanim: mockZmanim(),
-        candleLighting: null,
-        havdalah: null,
-      };
-    }
-    const day = daysMap[date];
-    if (item.category === 'parasha') day.parsha = item.title;
-    else if (item.category === 'holiday') day.holidays.push(item.title);
-    else if (item.category === 'candles') day.candleLighting = item.title;
-    else if (item.category === 'havdalah') day.havdalah = item.title;
-  });
 
   const daysInMonth = new Date(year, month, 0).getDate();
   const days = [];
-  for (let d = 1; d <= daysInMonth; d++) {
-    const date = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-    if (daysMap[date]) {
-      days.push(daysMap[date]);
-    } else {
-      days.push({
-        gregorian: date,
-        hebrew: '',
-        parsha: null,
-        zmanim: mockZmanim(),
-        holidays: [],
-        candleLighting: null,
-        havdalah: null,
-      });
-    }
-  }
 
-  // Determine Hebrew month/year
-  let hebrewMonth = 'unknown';
-  let hebrewYear = 'unknown';
-  if (items.length > 0 && items[0].hdate) {
-    const parts = items[0].hdate.split(' ');
-    if (parts.length >= से2) {
-      hebrewMonth = parts[1];
-      hebrewYear = parts[2];
-    }
+  for (let d = 1; d <= daysInMonth; d++) {
+    const date = new Date(year, month - 1, d);
+    const dateStr = date.toISOString().slice(0, 10);
+    const hdDay = new HDate(date);
+    const dayEvents = eventsByDate[dateStr] || [];
+
+    const holidays = dayEvents
+      .filter(isHolidayEvent)
+      .map(ev => ev.render('he'))
+      .filter(Boolean);
+
+    const candleEv = dayEvents.find(isCandleEvent);
+    const havdalahEv = dayEvents.find(isHavdalahEvent);
+    const parshaEv = dayEvents.find(isParshaEvent);
+
+    const zmanim = getZmanimForDate(hebcalLoc, date);
+
+    days.push({
+      gregorian: dateStr,
+      hebrew: hdDay.render('he'),
+      parsha: parshaEv ? parshaEv.render('he') : null,
+      zmanim,
+      holidays: [...new Set(holidays)],
+      candleLighting: candleEv ? candleEv.render('he') : null,
+      havdalah: havdalahEv ? havdalahEv.render('he') : null,
+    });
   }
 
   return {
     year,
     month,
-    hebrewMonth,
-    hebrewYear,
+    hebrewMonth: hd.getMonthName(),
+    hebrewYear: String(hd.getFullYear()),
     days,
-    location: { id: loc.id, name: loc.name },
+    location: { id: locationId, name: locData.name },
   };
 }

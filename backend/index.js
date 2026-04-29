@@ -37,7 +37,9 @@ app.get('/api/health', (req, res) => {
 if (process.env.NODE_ENV === 'production') {
   const frontendDist = path.join(__dirname, '..', 'frontend', 'dist');
   app.use(express.static(frontendDist));
-  app.get('*', (req, res) => {
+  // Express 5 catch-all — sendFile for non-API routes
+  app.use((req, res, next) => {
+    if (req.path.startsWith('/api/')) return next();
     res.sendFile(path.join(frontendDist, 'index.html'));
   });
 }

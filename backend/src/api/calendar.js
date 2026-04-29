@@ -12,7 +12,7 @@ export function registerRoutes(app) {
     }
   });
 
-  app.get('/api/calendar', (req, res) => {
+  app.get('/api/calendar', async (req, res) => {
     try {
       const year = parseInt(req.query.year) || new Date().getFullYear();
       const month = parseInt(req.query.month) || (new Date().getMonth() + 1);
@@ -22,7 +22,7 @@ export function registerRoutes(app) {
         return res.status(400).json({ error: 'שנה או חודש לא תקינים' });
       }
 
-      const data = getMonth(year, month, locationId);
+      const data = await getMonth(year, month, locationId);
       if (!data) {
         return res.status(400).json({ error: 'מיקום לא נמצא' });
       }

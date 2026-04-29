@@ -1,5 +1,5 @@
 // lib/vesetCalculator.ts — חישובי וסת (צד לקוח)
-// Ported from backend/src/services/vesetService.js
+// Used as fallback when backend is offline
 
 function addDays(dateStr: string, days: number): string {
   const [year, month, day] = dateStr.split('-').map(Number);
@@ -20,8 +20,6 @@ function daysBetween(a: string, b: string): number {
 
 export interface VesetSighting {
   date: string;
-  type?: string;
-  period?: 'day' | 'night';
 }
 
 export interface VesetPrediction {
@@ -32,10 +30,7 @@ export interface VesetPrediction {
 }
 
 function parseSightings(sightings: VesetSighting[]): string[] {
-  return sightings
-    .map(s => (typeof s === 'string' ? s : s.date))
-    .filter(Boolean)
-    .sort();
+  return sightings.map(s => s.date).filter(Boolean).sort();
 }
 
 export function calculateMonthly(sightings: VesetSighting[]): string[] {
@@ -64,30 +59,22 @@ export function calculateAll(sightings: VesetSighting[], vesetTypes?: string[]):
   if (types.includes('monthly')) {
     results.push({
       type: 'monthly',
-      description: 'עונת החודש — יום 30 לאחר ראייה',
+      description: 'עונת החודש — 30 יום לאחר ראייה',
       dates: calculateMonthly(sightings),
     });
   }
-
   if (types.includes('medium')) {
     results.push({
       type: 'medium',
-      description: 'עונה בינונית — יום 30 ויום 31 לאחר הראייה',
+      description: 'עונה בינונית — 30 ו-31 יום לאחר ראייה',
       dates: calculateMedium(sightings),
     });
   }
-
   if (types.includes('haflaga')) {
-    const haflaga = calculateHaflaga(sightings);
-    if (haflaga.dates.length > 0) {
-      results.push({
-        type: 'haflaga',
-        description: 'עונת הפלגה — חישוב לפי ממוצע מרווחים',
-        dates: haflaga.dates,
-        cycleLength: haflaga.cycleLength,
-      });
+    const h = calculateHaflaga(sightings);
+    if (h.dates.length > 0) {
+      results.push({ type: 'haflaga', description: `עונת הפלגה — מחזור ממוצע של ${h.cycleLength} ימים`, dates: h.dates, cycleLength: h.cycleLength });
     }
   }
-
   return results;
 }
