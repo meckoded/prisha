@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
 
+// Vite 8 uses rolldown which handles JSX natively — no @vitejs/plugin-react needed
 export default defineConfig({
-  plugins: [react()],
+  plugins: [tailwindcss()],
 })
