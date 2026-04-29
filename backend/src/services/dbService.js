@@ -16,6 +16,7 @@ export function init() {
 
   db = new Database(DB_PATH);
   db.pragma('journal_mode = WAL');
+  db.pragma('foreign_keys = ON');
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
@@ -23,6 +24,8 @@ export function init() {
       email TEXT UNIQUE NOT NULL,
       password_hash TEXT NOT NULL,
       name TEXT,
+      status TEXT DEFAULT 'active' CHECK(status IN ('active','blocked')),
+      role TEXT DEFAULT 'user' CHECK(role IN ('user','admin')),
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -33,12 +36,23 @@ export function init() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
-    CREATE TABLE IF NOT EXISTS periods (
+    CREATE TABLE IF NOT EXISTS events (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id TEXT REFERENCES users(id),
-      date TEXT NOT NULL,
+      type TEXT NOT NULL CHECK(type IN ('period','spot','birth','prediction')),
+      gregorian_date TEXT NOT NULL,
+      hebrew_date TEXT,
+      day_or_night TEXT DEFAULT 'day' CHECK(day_or_night IN ('day','night')),
+      created_by_system INTEGER DEFAULT 0,
+      prediction_type TEXT,
       notes TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS system_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
   `);
 
@@ -50,6 +64,8 @@ export function getDB() {
   return db;
 }
 
+// ========== Users ==========
+
 export function insertUser(id, email, hash, name) {
   const d = getDB();
   const stmt = d.prepare('INSERT INTO users (id, email, password_hash, name) VALUES (?, ?, ?, ?)');
@@ -58,7 +74,7 @@ export function insertUser(id, email, hash, name) {
 
 export function getUser(id) {
   const d = getDB();
-  return d.prepare('SELECT * FROM users WHERE id = ?').get(id);
+  return d.prepare('SELECT id, email, name, status, role, created_at FROM users WHERE id = ?').get(id);
 }
 
 export function getUserByEmail(email) {
@@ -66,15 +82,24 @@ export function getUserByEmail(email) {
   return d.prepare('SELECT * FROM users WHERE email = ?').get(email);
 }
 
-export function insertPeriod(userId, date, notes) {
+export function getAllUsers() {
   const d = getDB();
-  return d.prepare('INSERT INTO periods (user_id, date, notes) VALUES (?, ?, ?)').run(userId, date, notes || '');
+  return d.prepare('SELECT id, email, name, status, role, created_at FROM users ORDER BY created_at DESC').all();
 }
 
-export function getPeriods(userId) {
+export function setUserStatus(userId, status) {
   const d = getDB();
-  return d.prepare('SELECT * FROM periods WHERE user_id = ? ORDER BY date ASC').all(userId);
+  return d.prepare('UPDATE users SET status = ? WHERE id = ?').run(status, userId);
 }
+
+export function deleteUser(userId) {
+  const d = getDB();
+  d.prepare('DELETE FROM events WHERE user_id = ?').run(userId);
+  d.prepare('DELETE FROM user_locations WHERE user_id = ?').run(userId);
+  return d.prepare('DELETE FROM users WHERE id = ?').run(userId);
+}
+
+// ========== User Locations ==========
 
 export function setUserLocation(userId, locationId) {
   const d = getDB();
@@ -85,4 +110,85 @@ export function setUserLocation(userId, locationId) {
 export function getUserLocation(userId) {
   const d = getDB();
   return d.prepare('SELECT * FROM user_locations WHERE user_id = ?').get(userId);
+}
+
+// ========== Events ==========
+
+export function insertEvent(userId, type, gregorianDate, hebrewDate, dayOrNight, createdBySystem, predictionType, notes) {
+  const d = getDB();
+  return d.prepare(
+    'INSERT INTO events (user_id, type, gregorian_date, hebrew_date, day_or_night, created_by_system, prediction_type, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(userId, type, gregorianDate, hebrewDate || null, dayOrNight || 'day', createdBySystem ? 1 : 0, predictionType || null, notes || null);
+}
+
+export function getEvents(userId, includePredictions = true) {
+  const d = getDB();
+  if (includePredictions) {
+    return d.prepare('SELECT * FROM events WHERE user_id = ? ORDER BY gregorian_date ASC').all(userId);
+  }
+  return d.prepare('SELECT * FROM events WHERE user_id = ? AND created_by_system = 0 ORDER BY gregorian_date ASC').all(userId);
+}
+
+export function getEventsInRange(userId, fromDate, toDate, includePredictions = true) {
+  const d = getDB();
+  if (includePredictions) {
+    return d.prepare('SELECT * FROM events WHERE user_id = ? AND gregorian_date >= ? AND gregorian_date <= ? ORDER BY gregorian_date ASC').all(userId, fromDate, toDate);
+  }
+  return d.prepare('SELECT * FROM events WHERE user_id = ? AND gregorian_date >= ? AND gregorian_date <= ? AND created_by_system = 0 ORDER BY gregorian_date ASC').all(userId, fromDate, toDate);
+}
+
+export function getEventById(eventId) {
+  const d = getDB();
+  return d.prepare('SELECT * FROM events WHERE id = ?').get(eventId);
+}
+
+export function deleteEvent(eventId) {
+  const d = getDB();
+  return d.prepare('DELETE FROM events WHERE id = ?').run(eventId);
+}
+
+export function deleteSystemPredictions(userId) {
+  const d = getDB();
+  return d.prepare('DELETE FROM events WHERE user_id = ? AND created_by_system = 1').run(userId);
+}
+
+export function getEventCount(userId) {
+  const d = getDB();
+  return d.prepare('SELECT COUNT(*) as count FROM events WHERE user_id = ? AND created_by_system = 0').get(userId);
+}
+
+export function getPredictionCount(userId) {
+  const d = getDB();
+  return d.prepare('SELECT COUNT(*) as count FROM events WHERE user_id = ? AND created_by_system = 1').get(userId);
+}
+
+// ========== System Settings ==========
+
+export function getSystemSetting(key) {
+  const d = getDB();
+  return d.prepare('SELECT * FROM system_settings WHERE key = ?').get(key);
+}
+
+export function getAllSystemSettings() {
+  const d = getDB();
+  return d.prepare('SELECT * FROM system_settings ORDER BY key ASC').all();
+}
+
+export function setSystemSetting(key, value) {
+  const d = getDB();
+  return d.prepare(
+    'INSERT INTO system_settings (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP'
+  ).run(key, value);
+}
+
+// ========== Stats ==========
+
+export function getSystemStats() {
+  const d = getDB();
+  return {
+    totalUsers: d.prepare('SELECT COUNT(*) as count FROM users').get().count,
+    totalEvents: d.prepare('SELECT COUNT(*) as count FROM events WHERE created_by_system = 0').get().count,
+    totalPredictions: d.prepare('SELECT COUNT(*) as count FROM events WHERE created_by_system = 1').get().count,
+    activeUsers: d.prepare("SELECT COUNT(*) as count FROM users WHERE status = 'active'").get().count,
+  };
 }
