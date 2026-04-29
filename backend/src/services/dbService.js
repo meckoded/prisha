@@ -1,6 +1,5 @@
-// services/dbService.js — SQLite database
-import sqlite3 from 'sqlite3';
-const { Database } = sqlite3;
+// services/dbService.js — SQLite database (better-sqlite3, synchronous)
+import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -16,6 +15,7 @@ export function init() {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
   db = new Database(DB_PATH);
+  db.pragma('journal_mode = WAL');
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
@@ -52,8 +52,8 @@ export function getDB() {
 
 export function insertUser(id, email, hash, name) {
   const d = getDB();
-  d.prepare('INSERT INTO users (id, email, password_hash, name) VALUES (?, ?, ?, ?)')
-    .run(id, email, hash, name);
+  const stmt = d.prepare('INSERT INTO users (id, email, password_hash, name) VALUES (?, ?, ?, ?)');
+  return stmt.run(id, email, hash, name);
 }
 
 export function getUser(id) {
@@ -68,7 +68,7 @@ export function getUserByEmail(email) {
 
 export function insertPeriod(userId, date, notes) {
   const d = getDB();
-  d.prepare('INSERT INTO periods (user_id, date, notes) VALUES (?, ?, ?)').run(userId, date, notes || '');
+  return d.prepare('INSERT INTO periods (user_id, date, notes) VALUES (?, ?, ?)').run(userId, date, notes || '');
 }
 
 export function getPeriods(userId) {
@@ -79,7 +79,7 @@ export function getPeriods(userId) {
 export function setUserLocation(userId, locationId) {
   const d = getDB();
   d.prepare('DELETE FROM user_locations WHERE user_id = ?').run(userId);
-  d.prepare('INSERT INTO user_locations (user_id, location_id, is_default) VALUES (?, ?, ?)').run(userId, locationId, true);
+  return d.prepare('INSERT INTO user_locations (user_id, location_id, is_default) VALUES (?, ?, ?)').run(userId, locationId, true);
 }
 
 export function getUserLocation(userId) {
