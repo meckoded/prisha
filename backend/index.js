@@ -25,6 +25,9 @@ app.use(express.json());
 // Initialize database
 init();
 
+// Apply migration: ensure status/role columns exist on existing DBs
+import('./src/services/dbMigration.js').catch(() => {});
+
 // Routes
 registerCalendar(app);
 registerVeset(app);

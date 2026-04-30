@@ -4,6 +4,7 @@
 
 [build.environment]
   NODE_VERSION = "22"
+  VITE_API_URL = "https://postings-namespace-wyoming-entering.trycloudflare.com"
 
 [[redirects]]
   from = "/*"

@@ -88,6 +88,103 @@ export async function calculateVeset(
   return data;
 }
 
+// --- Events ---
+export interface AppEvent {
+  id: number;
+  user_id: string;
+  type: 'period' | 'spot' | 'birth' | 'prediction';
+  gregorian_date: string;
+  hebrew_date: string | null;
+  day_or_night: 'day' | 'night';
+  created_by_system: number;
+  prediction_type: string | null;
+  notes: string | null;
+  created_at: string;
+}
+
+export async function addEvent(eventData: {
+  type: string;
+  gregorianDate: string;
+  hebrewDate?: string;
+  dayOrNight?: string;
+  notes?: string;
+}): Promise<{ event: AppEvent }> {
+  const { data } = await client.post('/api/events', eventData);
+  return data;
+}
+
+export async function getEvents(year?: number, month?: number, includePredictions = true): Promise<{ events: AppEvent[] }> {
+  const params: any = {};
+  if (includePredictions !== undefined) params.predictions = includePredictions;
+  if (year) params.year = year;
+  if (month) params.month = month;
+  const { data } = await client.get('/api/events', { params });
+  return data;
+}
+
+export async function deleteEvent(eventId: number): Promise<{ deleted: boolean }> {
+  const { data } = await client.delete(`/api/events/${eventId}`);
+  return data;
+}
+
+// --- Admin ---
+export interface SystemStats {
+  totalUsers: number;
+  totalEvents: number;
+  totalPredictions: number;
+  activeUsers: number;
+  totalAlgorithms: number;
+}
+
+export interface AdminUser {
+  id: string;
+  email: string;
+  name: string;
+  status: string;
+  role: string;
+  created_at: string;
+}
+
+export interface AlgorithmInfo {
+  name: string;
+  description: string;
+}
+
+export async function getAdminStats(): Promise<SystemStats> {
+  const { data } = await client.get('/api/admin/stats');
+  return data;
+}
+
+export async function getAdminUsers(): Promise<{ users: AdminUser[] }> {
+  const { data } = await client.get('/api/admin/users');
+  return data;
+}
+
+export async function updateUserStatus(userId: string, status: string): Promise<{ id: string; status: string }> {
+  const { data } = await client.patch(`/api/admin/users/${userId}/status`, { status });
+  return data;
+}
+
+export async function deleteUser(userId: string): Promise<{ deleted: boolean }> {
+  const { data } = await client.delete(`/api/admin/users/${userId}`);
+  return data;
+}
+
+export async function getAdminSettings(): Promise<{ settings: Record<string, string> }> {
+  const { data } = await client.get('/api/admin/settings');
+  return data;
+}
+
+export async function updateSetting(key: string, value: string): Promise<{ key: string; value: string }> {
+  const { data } = await client.put(`/api/admin/settings/${key}`, { value });
+  return data;
+}
+
+export async function getAlgorithms(): Promise<{ algorithms: AlgorithmInfo[] }> {
+  const { data } = await client.get('/api/admin/algorithms');
+  return data;
+}
+
 // --- Auth ---
 export interface User {
   id: string;
