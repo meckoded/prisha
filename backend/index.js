@@ -9,6 +9,8 @@ import { fileURLToPath } from 'url';
 import { registerRoutes as registerCalendar } from './src/api/calendar.js';
 import { registerRoutes as registerVeset } from './src/api/veset.js';
 import { registerRoutes as registerAuth } from './src/api/auth.js';
+import { registerRoutes as registerEvents } from './src/api/events.js';
+import { registerRoutes as registerAdmin } from './src/api/admin.js';
 import { init } from './src/services/dbService.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -27,6 +29,8 @@ init();
 registerCalendar(app);
 registerVeset(app);
 registerAuth(app);
+registerEvents(app);
+registerAdmin(app);
 
 // Health check
 app.get('/api/health', (req, res) => {
