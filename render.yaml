@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: prisha-api
+    env: node
+    region: frankfurt
+    plan: starter
+    buildCommand: cd backend && npm ci
+    startCommand: cd backend && node scripts/seed-admin.js && node index.js
+    envVars:
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ADMIN_EMAIL
+        value: admin@prisha.app
+      - key: ADMIN_PASSWORD
+        value: admin123456
+      - key: ADMIN_NAME
+        value: מנהל מערכת
+      - key: NODE_ENV
+        value: production
+      - key: RESEND_API_KEY
+        sync: false
+      - key: MAIL_FROM
+        value: studio@grafitazia.com
+    disk:
+      name: prisha-data
+      mountPath: /opt/render/project/backend/data
+      sizeGB: 1

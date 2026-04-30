@@ -11,6 +11,7 @@ import { registerRoutes as registerVeset } from './src/api/veset.js';
 import { registerRoutes as registerAuth } from './src/api/auth.js';
 import { registerRoutes as registerEvents } from './src/api/events.js';
 import { registerRoutes as registerAdmin } from './src/api/admin.js';
+import { registerRoutes as registerEmail } from './src/api/email.js';
 import { init } from './src/services/dbService.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -34,6 +35,7 @@ registerVeset(app);
 registerAuth(app);
 registerEvents(app);
 registerAdmin(app);
+registerEmail(app);
 
 // Health check
 app.get('/api/health', (req, res) => {
