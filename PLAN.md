@@ -57,8 +57,8 @@
 | 6.2 backend/.env.example + frontend/.env.example | ✅ |
 | 6.3 test-server.sh — E2E test script | ✅ |
 | 6.4 Build verification — 509ms, no warnings | ✅ |
-| 6.5 Push to GitHub + verify Netlify deploy | ⬜ |
-| 6.6 Send completion email to admin | ⬜ |
+| 6.5 Push to GitHub + verify Netlify deploy | ✅ |
+| 6.6 Send completion email to admin | ✅ |
 
 ---
 

@@ -24,6 +24,8 @@ jobs:
 
       - name: Build
         run: cd frontend && npx vite build
+        env:
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
 
       - name: Deploy to Netlify
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
